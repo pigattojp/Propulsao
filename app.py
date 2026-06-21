@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
+import plotly.express as px
 
 from simulador import(
     dados_ex22,
@@ -9,6 +11,35 @@ from simulador import(
     simular_ramjet,
     simular_turbohelice
 )
+
+def rodar_simulacao(tipo_motor, dados_base, fora_de_projeto, N2):
+    if tipo_motor == "Turbofan":
+        return simular_turbofan(
+            dados_base,
+            fora_de_projeto=fora_de_projeto,
+            N2=N2
+        )
+    
+    elif tipo_motor == "Turbojato":
+        return simular_turbojato(
+            dados_base,
+            fora_de_projeto=fora_de_projeto,
+            N2=N2
+        )
+    
+    elif tipo_motor == "Ramjet":
+        return simular_ramjet(
+            dados_base,
+            fora_de_projeto=fora_de_projeto,
+            N2=N2
+        )
+
+    elif tipo_motor == "Turbo-hélice":
+        return simular_turbohelice(
+            dados_base,
+            fora_de_projeto=fora_de_projeto,
+            N2=N2
+        )
 
 st.set_page_config(
     page_title="Simulador",
@@ -44,33 +75,12 @@ dados["M"] = Mach
 dados["Ta"] = Ta
 dados["Pa"] = Pa
 
-if tipo_motor == "Turbofan":
-    resultado = simular_turbofan(
-        dados,
-        fora_de_projeto=fora_de_projeto,
-        N2=N2
-    )
-
-elif tipo_motor == "Turbojato":
-    resultado = simular_turbojato(
-        dados,
-        fora_de_projeto=fora_de_projeto,
-        N2=N2
-    )
-
-elif tipo_motor == "Ramjet":
-    resultado = simular_ramjet(
-        dados,
-        fora_de_projeto=fora_de_projeto,
-        N2=N2
-    )
-
-elif tipo_motor == "Turbo-hélice":
-    resultado = simular_turbohelice(
-        dados,
-        fora_de_projeto=fora_de_projeto,
-        N2=N2
-    )
+resultado = rodar_simulacao(
+    tipo_motor=tipo_motor,
+    dados_base=dados,
+    fora_de_projeto=fora_de_projeto,
+    N2=N2
+)
 
 st.write("## Entradas selecionadas")
 
@@ -141,6 +151,101 @@ else:
         f"{consumo['TSFC [kg/(kN.s)]']:.6f}"
     )
 
+st.write("## Variação com a rotação N2")
+
+N2_varredura = np.arange(0.65, 1.01, 0.01)
+
+linhas_grafico = []
+
+for N2_i in N2_varredura:
+    dados_i = dados.copy()
+
+    resultado_i = rodar_simulacao(
+        tipo_motor=tipo_motor,
+        dados_base=dados_i,
+        fora_de_projeto=True,
+        N2=N2_i
+    )
+
+    if tipo_motor in ["Turbofan", "Turbojato", "Ramjet"]:
+        desempenho_i = resultado_i["DESEMPENHO GLOBAL"]
+
+        empuxo_total = desempenho_i["Empuxo Total [kN]"]
+        consumo = desempenho_i["Consumo total de combustível [kg/h]"]
+        tsfc = desempenho_i["Consumo Específico (TSFC) [kg/(kN.s)]"]
+
+    else:
+        helice_i = resultado_i["HÉLICE E CAIXA"]
+        consumo_i = resultado_i["CONSUMO"]
+
+        empuxo_total = helice_i["Empuxo total [kN]"]
+        consumo = consumo_i["Consumo de combustível [kg/s]"] * 3600
+        tsfc = consumo_i["TSFC [kg/(kN.s)]"]
+
+    linhas_grafico.append({
+        "N2": N2_i,
+        "Empuxo total [kN]": empuxo_total,
+        "Consumo de combustível [kg/h]": consumo,
+        "TSFC [kg/(kN.s)]": tsfc
+    })
+
+df_grafico = pd.DataFrame(linhas_grafico)
+
+aba_empuxo, aba_consumo, aba_tsfc = st.tabs([
+    "Empuxo",
+    "Consumo",
+    "TSFC"
+])
+
+with aba_empuxo:
+    fig_empuxo = px.line(
+        df_grafico,
+        x="N2",
+        y="Empuxo total [kN]",
+        markers=True,
+        title="Empuxo total em função da rotação N2"
+    )
+    st.plotly_chart(fig_empuxo, use_container_width=True)
+
+with aba_consumo:
+    fig_consumo = px.line(
+        df_grafico,
+        x="N2",
+        y="Consumo de combustível [kg/h]",
+        markers=True,
+        title="Consumo de combustível em função da rotação N2"
+    )
+    st.plotly_chart(fig_consumo, use_container_width=True)
+
+with aba_tsfc:
+    fig_tsfc = px.line(
+        df_grafico,
+        x="N2",
+        y="TSFC [kg/(kN.s)]",
+        markers=True,
+        title="TSFC em função da rotação N2"
+    )
+    st.plotly_chart(fig_tsfc, use_container_width=True)
+
+#variavel_grafico = st.selectbox(
+#    "Variável do gráfico",
+#    [
+#       "Empuxo total [kN]",
+#        "Consumo de combustível [kg/h]",
+#        "TSFC [kg/(kN.s)]"
+#    ]
+#)
+
+#fig = px.line(
+#    df_grafico,
+#    x="N2",
+#    y=variavel_grafico,
+#    markers=True,
+#    title=f"{variavel_grafico} em função da rotação N2"
+#)
+
+#st.plotly_chart(fig, use_container_width=True)
+    
 st.write("## Detalhamento da simulação")
 
 linhas = []
